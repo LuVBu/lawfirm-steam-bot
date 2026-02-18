@@ -7,7 +7,7 @@
     "start": "node index.js"
   },
   "dependencies": {
-    "google-spreadsheet": "4.1.1",
+    "google-spreadsheet": "3.0.14",
     "steam-user": "4.25.0",
     "steam-totp": "2.1.0",
     "steam-tradeoffer-manager": "2.12.2",
