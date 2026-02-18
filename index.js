@@ -42,7 +42,7 @@ client.logOn({
 
 client.on('loggedOn', () => {
   console.log('✅ Успешный вход в Steam');
-  client.setPersona(SteamUser.Steam.EPersonaState.Online);
+  client.setPersona(1);
   client.gamesPlayed(440); // TF2
 });
 
