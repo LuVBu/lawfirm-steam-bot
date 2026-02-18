@@ -4,7 +4,7 @@ const SteamTotp = require('steam-totp');
 const TradeOfferManager = require('steam-tradeoffer-manager');
 const SteamCommunity = require('steamcommunity');
 
-// ========== ЧИТАЕМ НАСТРОЙКИ ИЗ ПЕРЕМЕННЫХ ОКРУЖЕНИЯ ==========
+// ========== ПЕРЕМЕННЫЕ ОКРУЖЕНИЯ ==========
 const STEAM_USERNAME = process.env.STEAM_USERNAME;
 const STEAM_PASSWORD = process.env.STEAM_PASSWORD;
 const SHARED_SECRET = process.env.SHARED_SECRET;
@@ -42,7 +42,7 @@ client.logOn({
 
 client.on('loggedOn', () => {
   console.log('✅ Успешный вход в Steam');
-  client.setPersona(1);
+  client.setPersona(1); // 1 = Online
   client.gamesPlayed(440); // TF2
 });
 
@@ -57,76 +57,157 @@ client.on('error', (err) => {
   console.error('❌ Ошибка Steam клиента:', err);
 });
 
-// ========== РАБОТА С GOOGLE TABLES ==========
+// ========== РАБОТА С GOOGLE ТАБЛИЦЕЙ ==========
 async function processOrders() {
   try {
     const doc = new GoogleSpreadsheet(SPREADSHEET_ID);
     await doc.useServiceAccountAuth(googleCredentials);
     await doc.loadInfo();
 
-    const sheet = doc.sheetsByTitle['Покупка_ключей'];
-    if (!sheet) {
-      console.error('❌ Лист "Покупка_ключей" не найден');
-      return;
+    // --- ЛИСТ 1: ПОКУПКА КЛЮЧЕЙ (бот продаёт) ---
+    const buySheet = doc.sheetsByTitle['Покупка_ключей'];
+    if (buySheet) {
+      const rows = await buySheet.getRows();
+      for (const row of rows) {
+        const orderStatus = row.get('Статус заказа');      // столбец F
+        const sentStatus = row.get('Статус отправки');     // столбец G
+
+        // Если заказ готов к отправке и ещё не обрабатывался
+        if (orderStatus === 'Ожидает отправки' && sentStatus !== 'Трейд создан' && sentStatus !== 'Выполнен') {
+          const keyCount = parseInt(row.get('Количество ключей'));
+          const tradeLink = row.get('Трейд-ссылка');
+          const username = row.get('Username');
+
+          console.log(`🔄 Продажа: заказ для ${username} (${keyCount} ключей)`);
+
+          const partnerMatch = tradeLink.match(/partner=(\d+)/);
+          const tokenMatch = tradeLink.match(/token=([a-zA-Z0-9_-]+)/);
+
+          if (!partnerMatch || !tokenMatch) {
+            console.error('❌ Неверная ссылка:', tradeLink);
+            continue;
+          }
+
+          const partnerAccountId = partnerMatch[1];
+          const token = tokenMatch[1];
+
+          const offer = manager.createOffer(partnerAccountId);
+          offer.setAccessToken(token);
+
+          manager.getInventoryContents(440, 2, true, (err, myInventory) => {
+            if (err) {
+              console.error('❌ Ошибка инвентаря:', err);
+              return;
+            }
+
+            const keys = myInventory.filter(item =>
+              item.name === 'Mann Co. Supply Crate Key'
+            ).slice(0, keyCount);
+
+            if (keys.length < keyCount) {
+              console.error(`❌ Недостаточно ключей. Есть: ${keys.length}, нужно: ${keyCount}`);
+              return;
+            }
+
+            keys.forEach(key => offer.addMyItem(key));
+            offer.setMessage('Your TF2 keys from Law Firm Steam! Better call Saul!');
+
+            offer.send((err, status) => {
+              if (err) {
+                console.error('❌ Ошибка отправки трейда:', err);
+              } else {
+                console.log(`✅ Трейд отправлен! ID: ${offer.id}, статус: ${status}`);
+                row.set('Статус отправки', 'Трейд создан');
+                row.save().catch(e => console.error('Ошибка сохранения:', e));
+
+                offer.on('accepted', () => {
+                  console.log(`🎉 Трейд ${offer.id} принят!`);
+                  row.set('Статус отправки', 'Выполнен');
+                  row.save().catch(e => console.error('Ошибка сохранения после принятия:', e));
+                });
+
+                offer.on('declined', () => {
+                  console.log(`❌ Трейд ${offer.id} отклонён.`);
+                  row.set('Статус отправки', 'Отклонён');
+                  row.save().catch(e => console.error('Ошибка сохранения после отклонения:', e));
+                });
+              }
+            });
+          });
+        }
+      }
+    } else {
+      console.warn('⚠️ Лист "Покупка_ключей" не найден');
     }
 
-    const rows = await sheet.getRows();
+    // --- ЛИСТ 2: ПРОДАЖА КЛЮЧЕЙ (бот покупает) ---
+    const sellSheet = doc.sheetsByTitle['Продажа_ключей'];
+    if (sellSheet) {
+      const rows = await sellSheet.getRows();
+      for (const row of rows) {
+        const orderStatus = row.get('Статус заказа');      // столбец F
+        const sentStatus = row.get('Статус отправки');     // столбец G
 
-    for (const row of rows) {
-      const orderStatus = row.get('Статус заказа');
-      const sentStatus = row.get('Статус отправки');
+        // Если заказ готов к получению и ещё не обрабатывался
+        if (orderStatus === 'Ожидает получения' && sentStatus !== 'Трейд создан' && sentStatus !== 'Выполнен') {
+          const keyCount = parseInt(row.get('Количество ключей'));
+          const tradeLink = row.get('Трейд-ссылка');
+          const username = row.get('Username');
 
-      if (orderStatus === 'Ожидает отправки' && sentStatus !== 'Отправлено') {
-        const keyCount = parseInt(row.get('Количество ключей'));
-        const tradeLink = row.get('Трейд-ссылка');
-        const username = row.get('Username');
+          console.log(`🔄 Покупка: заказ для ${username} (${keyCount} ключей)`);
 
-        console.log(`🔄 Обрабатываем заказ для ${username}: ${keyCount} ключей`);
+          const partnerMatch = tradeLink.match(/partner=(\d+)/);
+          const tokenMatch = tradeLink.match(/token=([a-zA-Z0-9_-]+)/);
 
-        const partnerMatch = tradeLink.match(/partner=(\d+)/);
-        const tokenMatch = tradeLink.match(/token=([a-zA-Z0-9_-]+)/);
-
-        if (!partnerMatch || !tokenMatch) {
-          console.error('❌ Неверный формат трейд-ссылки:', tradeLink);
-          continue;
-        }
-
-        const partnerAccountId = partnerMatch[1];
-        const token = tokenMatch[1];
-
-        const offer = manager.createOffer(partnerAccountId);
-        offer.setAccessToken(token);
-
-        manager.getInventoryContents(440, 2, true, (err, myInventory) => {
-          if (err) {
-            console.error('❌ Ошибка получения инвентаря:', err);
-            return;
+          if (!partnerMatch || !tokenMatch) {
+            console.error('❌ Неверная ссылка:', tradeLink);
+            continue;
           }
 
-          const keys = myInventory.filter(item =>
-            item.name === 'Mann Co. Supply Crate Key'
-          ).slice(0, keyCount);
+          const partnerAccountId = partnerMatch[1];
+          const token = tokenMatch[1];
 
-          if (keys.length < keyCount) {
-            console.error(`❌ Недостаточно ключей. Есть: ${keys.length}, нужно: ${keyCount}`);
-            return;
-          }
+          // Создаём предложение, где бот просит ключи, а сам ничего не даёт (пока)
+          const offer = manager.createOffer(partnerAccountId);
+          offer.setAccessToken(token);
 
-          keys.forEach(key => offer.addMyItem(key));
-          offer.setMessage('Your TF2 keys from Law Firm Steam! Better call Saul!');
+          // Добавляем предметы, которые бот хочет получить (ключи пользователя)
+          // Для этого нужно знать assetid ключей пользователя, но мы их не знаем.
+          // Вместо этого бот должен отправить пустое предложение, а пользователь сам положит ключи.
+          // Либо бот запрашивает конкретные ключи – но мы не можем указать, какие именно.
+          // Поэтому делаем так: бот отправляет предложение, где он ничего не даёт, и в сообщении просит положить ключи.
+          // Пользователь сам добавит нужное количество ключей и подтвердит.
+
+          offer.setMessage(`Please put ${keyCount} TF2 keys into this trade. After you confirm, I will send payment.`);
 
           offer.send((err, status) => {
             if (err) {
-              console.error('❌ Ошибка отправки трейда:', err);
+              console.error('❌ Ошибка создания запроса на получение ключей:', err);
             } else {
-              console.log(`✅ Трейд отправлен! Статус: ${status}`);
-              row.set('Статус отправки', 'Отправлено');
-              row.save().catch(e => console.error('Ошибка сохранения строки:', e));
+              console.log(`✅ Запрос на получение ключей отправлен! ID: ${offer.id}, статус: ${status}`);
+              row.set('Статус отправки', 'Трейд создан');
+              row.save().catch(e => console.error('Ошибка сохранения:', e));
+
+              offer.on('accepted', () => {
+                console.log(`🎉 Трейд ${offer.id} принят! Ключи получены.`);
+                row.set('Статус отправки', 'Выполнен');
+                // Здесь можно добавить логику выплаты (например, отметить для ручного перевода)
+                row.save().catch(e => console.error('Ошибка сохранения после принятия:', e));
+              });
+
+              offer.on('declined', () => {
+                console.log(`❌ Трейд ${offer.id} отклонён.`);
+                row.set('Статус отправки', 'Отклонён');
+                row.save().catch(e => console.error('Ошибка сохранения после отклонения:', e));
+              });
             }
           });
-        });
+        }
       }
+    } else {
+      console.warn('⚠️ Лист "Продажа_ключей" не найден');
     }
+
   } catch (error) {
     console.error('❌ Ошибка при обработке заказов:', error);
   }
