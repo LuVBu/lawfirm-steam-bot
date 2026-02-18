@@ -4,7 +4,7 @@
   "description": "Steam bot for automatic TF2 key trading",
   "main": "bot.js",
   "scripts": {
-    "start": "node bot.js"
+    "start": "node index.js"
   },
   "dependencies": {
     "google-spreadsheet": "^4.0.0",
