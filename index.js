@@ -60,20 +60,31 @@ client.on('error', (err) => {
 // ========== РАБОТА С GOOGLE ТАБЛИЦЕЙ ==========
 async function processOrders() {
   try {
+    console.log('🔍 Начинаем проверку таблицы...');
     const doc = new GoogleSpreadsheet(SPREADSHEET_ID);
     await doc.useServiceAccountAuth(googleCredentials);
     await doc.loadInfo();
+    console.log('✅ Таблица загружена, название:', doc.title);
 
     // --- ЛИСТ 1: ПОКУПКА КЛЮЧЕЙ (бот продаёт) ---
     const buySheet = doc.sheetsByTitle['Покупка_ключей'];
     if (buySheet) {
       const rows = await buySheet.getRows();
-      for (const row of rows) {
-        // В версии 3.x используем row['Название столбца']
+      console.log(`📊 Лист "Покупка_ключей": найдено строк: ${rows.length}`);
+      for (const [index, row] of rows.entries()) {
+        // Выводим значения всех нужных полей для каждой строки
+        console.log(`\n--- Строка ${index + 1} ---`);
+        console.log(`Статус заказа: "${row['Статус заказа']}"`);
+        console.log(`Статус отправки: "${row['Статус отправки']}"`);
+        console.log(`Количество ключей: "${row['Количество ключей']}"`);
+        console.log(`Трейд-ссылка: "${row['Трейд-ссылка']}"`);
+        console.log(`Username: "${row['Username']}"`);
+
         const orderStatus = row['Статус заказа'];
         const sentStatus = row['Статус отправки'];
 
         if (orderStatus === 'Ожидает отправки' && sentStatus !== 'Трейд создан' && sentStatus !== 'Выполнен') {
+          console.log('🎯 НАЙДЕН ЗАКАЗ ДЛЯ ОБРАБОТКИ!');
           const keyCount = parseInt(row['Количество ключей']);
           const tradeLink = row['Трейд-ссылка'];
           const username = row['Username'];
@@ -134,6 +145,8 @@ async function processOrders() {
               }
             });
           });
+        } else {
+          console.log('⏭️ Условие не выполнено, пропускаем.');
         }
       }
     } else {
@@ -144,11 +157,17 @@ async function processOrders() {
     const sellSheet = doc.sheetsByTitle['Продажа_ключей'];
     if (sellSheet) {
       const rows = await sellSheet.getRows();
-      for (const row of rows) {
+      console.log(`📊 Лист "Продажа_ключей": найдено строк: ${rows.length}`);
+      for (const [index, row] of rows.entries()) {
+        console.log(`\n--- Строка ${index + 1} (продажа) ---`);
+        console.log(`Статус заказа: "${row['Статус заказа']}"`);
+        console.log(`Статус отправки: "${row['Статус отправки']}"`);
+
         const orderStatus = row['Статус заказа'];
         const sentStatus = row['Статус отправки'];
 
         if (orderStatus === 'Ожидает получения' && sentStatus !== 'Трейд создан' && sentStatus !== 'Выполнен') {
+          console.log('🎯 НАЙДЕН ЗАКАЗ НА ПОКУПКУ!');
           const keyCount = parseInt(row['Количество ключей']);
           const tradeLink = row['Трейд-ссылка'];
           const username = row['Username'];
@@ -191,6 +210,8 @@ async function processOrders() {
               });
             }
           });
+        } else {
+          console.log('⏭️ Условие не выполнено, пропускаем.');
         }
       }
     } else {
