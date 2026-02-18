@@ -2,7 +2,7 @@
   "name": "lawfirm-steam-bot",
   "version": "1.0.0",
   "description": "Steam bot for automatic TF2 key trading",
-  "main": "bot.js",
+  "main": "index.js",
   "scripts": {
     "start": "node index.js"
   },
@@ -10,7 +10,7 @@
     "google-spreadsheet": "^4.0.0",
     "steam-user": "^5.0.0",
     "steam-totp": "^2.1.0",
-    "steam-tradeoffer-manager": "^4.0.0",
+    "steam-tradeoffer-manager": "^4.1.0",
     "steamcommunity": "^3.46.0"
   }
 }
