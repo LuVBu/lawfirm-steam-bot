@@ -7,10 +7,10 @@
     "start": "node index.js"
   },
   "dependencies": {
-    "google-spreadsheet": "^4.1.1",
-    "steam-user": "^5.0.0",
-    "steam-totp": "^2.1.0",
-    "steam-tradeoffer-manager": "^4.2.0",
-    "steamcommunity": "^3.46.0"
+    "google-spreadsheet": "4.1.1",
+    "steam-user": "5.0.0",
+    "steam-totp": "2.1.0",
+    "steam-tradeoffer-manager": "4.2.3",
+    "steamcommunity": "3.46.0"
   }
 }
