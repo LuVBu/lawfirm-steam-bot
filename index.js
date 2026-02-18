@@ -65,38 +65,39 @@ async function processOrders() {
     await doc.useServiceAccountAuth(googleCredentials);
     await doc.loadInfo();
     console.log('✅ Таблица загружена, название:', doc.title);
-    
+
     // --- ЛИСТ 1: ПОКУПКА КЛЮЧЕЙ (бот продаёт) ---
-const buySheet = doc.sheetsByTitle['Покупка_ключей'];
-if (buySheet) {
-  await buySheet.loadHeaderRow(); // принудительно читаем заголовки
-  console.log('🔤 Заголовки листа "Покупка_ключей":', buySheet.headerValues);
-  const rows = await buySheet.getRows();
-  console.log(`📊 Лист "Покупка_ключей": найдено строк: ${rows.length}`);
-  for (const [index, row] of rows.entries()) {
-    console.log(`\n--- Строка ${index + 1} ---`);
-    // Выводим все доступные ключи в строке
-    console.log('Доступные поля:', Object.keys(row));
-    console.log(`Статус заказа: "${row['Статус заказа']}"`);
-    console.log(`Статус отправки: "${row['Статус отправки']}"`);
-    console.log(`Количество ключей: "${row['Количество ключей']}"`);
-    console.log(`Трейд-ссылка: "${row['Трейд-ссылка']}"`);
-    console.log(`Username: "${row['Username']}"`);
-
-    // ... остальная логика
-  }
-}
-
+    const buySheet = doc.sheetsByTitle['Покупка_ключей'];
+    if (buySheet) {
+      await buySheet.loadHeaderRow(); // принудительно загружаем заголовки
+      console.log('🔤 Заголовки листа "Покупка_ключей":', buySheet.headerValues);
+      const rows = await buySheet.getRows();
+      console.log(`📊 Лист "Покупка_ключей": найдено строк: ${rows.length}`);
+      
+      for (const [index, row] of rows.entries()) {
+        console.log(`\n--- Строка ${index + 1} (продажа) ---`);
+        // Для отладки выводим все доступные поля
+        console.log('Доступные поля:', Object.keys(row));
+        
         const orderStatus = row['Статус заказа'];
         const sentStatus = row['Статус отправки'];
+        const keyCount = row['Количество ключей'];
+        const tradeLink = row['Трейд-ссылка'];
+        const username = row['Username'];
+
+        console.log(`Статус заказа: "${orderStatus}"`);
+        console.log(`Статус отправки: "${sentStatus}"`);
+        console.log(`Количество ключей: "${keyCount}"`);
+        console.log(`Трейд-ссылка: "${tradeLink}"`);
+        console.log(`Username: "${username}"`);
 
         if (orderStatus === 'Ожидает отправки' && sentStatus !== 'Трейд создан' && sentStatus !== 'Выполнен') {
-          console.log('🎯 НАЙДЕН ЗАКАЗ ДЛЯ ОБРАБОТКИ!');
-          const keyCount = parseInt(row['Количество ключей']);
-          const tradeLink = row['Трейд-ссылка'];
-          const username = row['Username'];
-
-          console.log(`🔄 Продажа: заказ для ${username} (${keyCount} ключей)`);
+          console.log('🎯 НАЙДЕН ЗАКАЗ ДЛЯ ОБРАБОТКИ (продажа)!');
+          const count = parseInt(keyCount);
+          if (isNaN(count) || count <= 0) {
+            console.error('❌ Некорректное количество ключей:', keyCount);
+            continue; // continue здесь допустим, потому что мы в цикле for
+          }
 
           const partnerMatch = tradeLink.match(/partner=(\d+)/);
           const tokenMatch = tradeLink.match(/token=([a-zA-Z0-9_-]+)/);
@@ -115,15 +116,15 @@ if (buySheet) {
           manager.getInventoryContents(440, 2, true, (err, myInventory) => {
             if (err) {
               console.error('❌ Ошибка инвентаря:', err);
-              return;
+              return; // вместо continue
             }
 
             const keys = myInventory.filter(item =>
               item.name === 'Mann Co. Supply Crate Key'
-            ).slice(0, keyCount);
+            ).slice(0, count);
 
-            if (keys.length < keyCount) {
-              console.error(`❌ Недостаточно ключей. Есть: ${keys.length}, нужно: ${keyCount}`);
+            if (keys.length < count) {
+              console.error(`❌ Недостаточно ключей. Есть: ${keys.length}, нужно: ${count}`);
               return;
             }
 
@@ -133,27 +134,27 @@ if (buySheet) {
             offer.send((err, status) => {
               if (err) {
                 console.error('❌ Ошибка отправки трейда:', err);
-              } else {
-                console.log(`✅ Трейд отправлен! ID: ${offer.id}, статус: ${status}`);
-                row['Статус отправки'] = 'Трейд создан';
-                row.save().catch(e => console.error('Ошибка сохранения:', e));
-
-                offer.on('accepted', () => {
-                  console.log(`🎉 Трейд ${offer.id} принят!`);
-                  row['Статус отправки'] = 'Выполнен';
-                  row.save().catch(e => console.error('Ошибка сохранения после принятия:', e));
-                });
-
-                offer.on('declined', () => {
-                  console.log(`❌ Трейд ${offer.id} отклонён.`);
-                  row['Статус отправки'] = 'Отклонён';
-                  row.save().catch(e => console.error('Ошибка сохранения после отклонения:', e));
-                });
+                return; // вместо continue
               }
+              console.log(`✅ Трейд отправлен! ID: ${offer.id}, статус: ${status}`);
+              row['Статус отправки'] = 'Трейд создан';
+              row.save().catch(e => console.error('Ошибка сохранения:', e));
+
+              offer.on('accepted', () => {
+                console.log(`🎉 Трейд ${offer.id} принят!`);
+                row['Статус отправки'] = 'Выполнен';
+                row.save().catch(e => console.error('Ошибка сохранения после принятия:', e));
+              });
+
+              offer.on('declined', () => {
+                console.log(`❌ Трейд ${offer.id} отклонён.`);
+                row['Статус отправки'] = 'Отклонён';
+                row.save().catch(e => console.error('Ошибка сохранения после отклонения:', e));
+              });
             });
           });
         } else {
-          console.log('⏭️ Условие не выполнено, пропускаем.');
+          console.log('⏭️ Условие не выполнено, пропускаем строку.');
         }
       }
     } else {
@@ -163,23 +164,34 @@ if (buySheet) {
     // --- ЛИСТ 2: ПРОДАЖА КЛЮЧЕЙ (бот покупает) ---
     const sellSheet = doc.sheetsByTitle['Продажа_ключей'];
     if (sellSheet) {
+      await sellSheet.loadHeaderRow();
+      console.log('🔤 Заголовки листа "Продажа_ключей":', sellSheet.headerValues);
       const rows = await sellSheet.getRows();
       console.log(`📊 Лист "Продажа_ключей": найдено строк: ${rows.length}`);
+
       for (const [index, row] of rows.entries()) {
-        console.log(`\n--- Строка ${index + 1} (продажа) ---`);
-        console.log(`Статус заказа: "${row['Статус заказа']}"`);
-        console.log(`Статус отправки: "${row['Статус отправки']}"`);
+        console.log(`\n--- Строка ${index + 1} (покупка) ---`);
+        console.log('Доступные поля:', Object.keys(row));
 
         const orderStatus = row['Статус заказа'];
         const sentStatus = row['Статус отправки'];
+        const keyCount = row['Количество ключей'];
+        const tradeLink = row['Трейд-ссылка'];
+        const username = row['Username'];
+
+        console.log(`Статус заказа: "${orderStatus}"`);
+        console.log(`Статус отправки: "${sentStatus}"`);
+        console.log(`Количество ключей: "${keyCount}"`);
+        console.log(`Трейд-ссылка: "${tradeLink}"`);
+        console.log(`Username: "${username}"`);
 
         if (orderStatus === 'Ожидает получения' && sentStatus !== 'Трейд создан' && sentStatus !== 'Выполнен') {
-          console.log('🎯 НАЙДЕН ЗАКАЗ НА ПОКУПКУ!');
-          const keyCount = parseInt(row['Количество ключей']);
-          const tradeLink = row['Трейд-ссылка'];
-          const username = row['Username'];
-
-          console.log(`🔄 Покупка: заказ для ${username} (${keyCount} ключей)`);
+          console.log('🎯 НАЙДЕН ЗАКАЗ ДЛЯ ОБРАБОТКИ (покупка)!');
+          const count = parseInt(keyCount);
+          if (isNaN(count) || count <= 0) {
+            console.error('❌ Некорректное количество ключей:', keyCount);
+            continue;
+          }
 
           const partnerMatch = tradeLink.match(/partner=(\d+)/);
           const tokenMatch = tradeLink.match(/token=([a-zA-Z0-9_-]+)/);
@@ -194,31 +206,31 @@ if (buySheet) {
 
           const offer = manager.createOffer(partnerAccountId);
           offer.setAccessToken(token);
-          offer.setMessage(`Please put ${keyCount} TF2 keys into this trade. After you confirm, I will send payment.`);
+          offer.setMessage(`Please put ${count} TF2 keys into this trade. After you confirm, I will send payment.`);
 
           offer.send((err, status) => {
             if (err) {
               console.error('❌ Ошибка создания запроса на получение ключей:', err);
-            } else {
-              console.log(`✅ Запрос на получение ключей отправлен! ID: ${offer.id}, статус: ${status}`);
-              row['Статус отправки'] = 'Трейд создан';
-              row.save().catch(e => console.error('Ошибка сохранения:', e));
-
-              offer.on('accepted', () => {
-                console.log(`🎉 Трейд ${offer.id} принят! Ключи получены.`);
-                row['Статус отправки'] = 'Выполнен';
-                row.save().catch(e => console.error('Ошибка сохранения после принятия:', e));
-              });
-
-              offer.on('declined', () => {
-                console.log(`❌ Трейд ${offer.id} отклонён.`);
-                row['Статус отправки'] = 'Отклонён';
-                row.save().catch(e => console.error('Ошибка сохранения после отклонения:', e));
-              });
+              return;
             }
+            console.log(`✅ Запрос на получение ключей отправлен! ID: ${offer.id}, статус: ${status}`);
+            row['Статус отправки'] = 'Трейд создан';
+            row.save().catch(e => console.error('Ошибка сохранения:', e));
+
+            offer.on('accepted', () => {
+              console.log(`🎉 Трейд ${offer.id} принят! Ключи получены.`);
+              row['Статус отправки'] = 'Выполнен';
+              row.save().catch(e => console.error('Ошибка сохранения после принятия:', e));
+            });
+
+            offer.on('declined', () => {
+              console.log(`❌ Трейд ${offer.id} отклонён.`);
+              row['Статус отправки'] = 'Отклонён';
+              row.save().catch(e => console.error('Ошибка сохранения после отклонения:', e));
+            });
           });
         } else {
-          console.log('⏭️ Условие не выполнено, пропускаем.');
+          console.log('⏭️ Условие не выполнено, пропускаем строку.');
         }
       }
     } else {
