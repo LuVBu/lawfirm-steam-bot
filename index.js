@@ -69,34 +69,33 @@ async function processOrders() {
     // --- ЛИСТ 1: ПОКУПКА КЛЮЧЕЙ (бот продаёт) ---
     const buySheet = doc.sheetsByTitle['Покупка_ключей'];
     if (buySheet) {
-      await buySheet.loadHeaderRow(); // принудительно загружаем заголовки
+      await buySheet.loadHeaderRow();
       console.log('🔤 Заголовки листа "Покупка_ключей":', buySheet.headerValues);
       const rows = await buySheet.getRows();
       console.log(`📊 Лист "Покупка_ключей": найдено строк: ${rows.length}`);
       
       for (const [index, row] of rows.entries()) {
         console.log(`\n--- Строка ${index + 1} (продажа) ---`);
-        // Для отладки выводим все доступные поля
-        console.log('Доступные поля:', Object.keys(row));
         
-        const orderStatus = row['Статус заказа'];
-        const sentStatus = row['Статус отправки'];
-        const keyCount = row['Количество ключей'];
-        const tradeLink = row['Трейд-ссылка'];
-        const username = row['Username'];
+        // Доступ к данным по буквам столбцов
+        const orderStatus = row['F']; // Статус заказа
+        const sentStatus = row['G'];  // Статус отправки
+        const keyCount = row['D'];    // Количество ключей
+        const tradeLink = row['E'];   // Трейд-ссылка
+        const username = row['C'];     // Username
 
-        console.log(`Статус заказа: "${orderStatus}"`);
-        console.log(`Статус отправки: "${sentStatus}"`);
-        console.log(`Количество ключей: "${keyCount}"`);
-        console.log(`Трейд-ссылка: "${tradeLink}"`);
-        console.log(`Username: "${username}"`);
+        console.log(`Статус заказа (F): "${orderStatus}"`);
+        console.log(`Статус отправки (G): "${sentStatus}"`);
+        console.log(`Количество ключей (D): "${keyCount}"`);
+        console.log(`Трейд-ссылка (E): "${tradeLink}"`);
+        console.log(`Username (C): "${username}"`);
 
         if (orderStatus === 'Ожидает отправки' && sentStatus !== 'Трейд создан' && sentStatus !== 'Выполнен') {
           console.log('🎯 НАЙДЕН ЗАКАЗ ДЛЯ ОБРАБОТКИ (продажа)!');
           const count = parseInt(keyCount);
           if (isNaN(count) || count <= 0) {
             console.error('❌ Некорректное количество ключей:', keyCount);
-            continue; // continue здесь допустим, потому что мы в цикле for
+            continue;
           }
 
           const partnerMatch = tradeLink.match(/partner=(\d+)/);
@@ -116,7 +115,7 @@ async function processOrders() {
           manager.getInventoryContents(440, 2, true, (err, myInventory) => {
             if (err) {
               console.error('❌ Ошибка инвентаря:', err);
-              return; // вместо continue
+              return;
             }
 
             const keys = myInventory.filter(item =>
@@ -134,21 +133,21 @@ async function processOrders() {
             offer.send((err, status) => {
               if (err) {
                 console.error('❌ Ошибка отправки трейда:', err);
-                return; // вместо continue
+                return;
               }
               console.log(`✅ Трейд отправлен! ID: ${offer.id}, статус: ${status}`);
-              row['Статус отправки'] = 'Трейд создан';
+              row['G'] = 'Трейд создан';
               row.save().catch(e => console.error('Ошибка сохранения:', e));
 
               offer.on('accepted', () => {
                 console.log(`🎉 Трейд ${offer.id} принят!`);
-                row['Статус отправки'] = 'Выполнен';
+                row['G'] = 'Выполнен';
                 row.save().catch(e => console.error('Ошибка сохранения после принятия:', e));
               });
 
               offer.on('declined', () => {
                 console.log(`❌ Трейд ${offer.id} отклонён.`);
-                row['Статус отправки'] = 'Отклонён';
+                row['G'] = 'Отклонён';
                 row.save().catch(e => console.error('Ошибка сохранения после отклонения:', e));
               });
             });
@@ -171,19 +170,18 @@ async function processOrders() {
 
       for (const [index, row] of rows.entries()) {
         console.log(`\n--- Строка ${index + 1} (покупка) ---`);
-        console.log('Доступные поля:', Object.keys(row));
 
-        const orderStatus = row['Статус заказа'];
-        const sentStatus = row['Статус отправки'];
-        const keyCount = row['Количество ключей'];
-        const tradeLink = row['Трейд-ссылка'];
-        const username = row['Username'];
+        const orderStatus = row['F']; // Статус заказа
+        const sentStatus = row['G'];  // Статус отправки
+        const keyCount = row['D'];    // Количество ключей
+        const tradeLink = row['E'];   // Трейд-ссылка
+        const username = row['C'];     // Username
 
-        console.log(`Статус заказа: "${orderStatus}"`);
-        console.log(`Статус отправки: "${sentStatus}"`);
-        console.log(`Количество ключей: "${keyCount}"`);
-        console.log(`Трейд-ссылка: "${tradeLink}"`);
-        console.log(`Username: "${username}"`);
+        console.log(`Статус заказа (F): "${orderStatus}"`);
+        console.log(`Статус отправки (G): "${sentStatus}"`);
+        console.log(`Количество ключей (D): "${keyCount}"`);
+        console.log(`Трейд-ссылка (E): "${tradeLink}"`);
+        console.log(`Username (C): "${username}"`);
 
         if (orderStatus === 'Ожидает получения' && sentStatus !== 'Трейд создан' && sentStatus !== 'Выполнен') {
           console.log('🎯 НАЙДЕН ЗАКАЗ ДЛЯ ОБРАБОТКИ (покупка)!');
@@ -214,18 +212,18 @@ async function processOrders() {
               return;
             }
             console.log(`✅ Запрос на получение ключей отправлен! ID: ${offer.id}, статус: ${status}`);
-            row['Статус отправки'] = 'Трейд создан';
+            row['G'] = 'Трейд создан';
             row.save().catch(e => console.error('Ошибка сохранения:', e));
 
             offer.on('accepted', () => {
               console.log(`🎉 Трейд ${offer.id} принят! Ключи получены.`);
-              row['Статус отправки'] = 'Выполнен';
+              row['G'] = 'Выполнен';
               row.save().catch(e => console.error('Ошибка сохранения после принятия:', e));
             });
 
             offer.on('declined', () => {
               console.log(`❌ Трейд ${offer.id} отклонён.`);
-              row['Статус отправки'] = 'Отклонён';
+              row['G'] = 'Отклонён';
               row.save().catch(e => console.error('Ошибка сохранения после отклонения:', e));
             });
           });
