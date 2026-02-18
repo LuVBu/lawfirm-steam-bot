@@ -69,7 +69,7 @@ async function processOrders() {
     // --- ЛИСТ 1: ПОКУПКА КЛЮЧЕЙ (бот продаёт) ---
     const buySheet = doc.sheetsByTitle['Покупка_ключей'];
     if (buySheet) {
-      await buySheet.loadHeaderRow();
+      await buySheet.loadHeaderRow(); // загружаем заголовки
       console.log('🔤 Заголовки листа "Покупка_ключей":', buySheet.headerValues);
       const rows = await buySheet.getRows();
       console.log(`📊 Лист "Покупка_ключей": найдено строк: ${rows.length}`);
@@ -77,7 +77,7 @@ async function processOrders() {
       for (const [index, row] of rows.entries()) {
         console.log(`\n--- Строка ${index + 1} (продажа) ---`);
         
-        // Доступ к данным по буквам столбцов
+        // Доступ по буквам столбцов
         const orderStatus = row['F']; // Статус заказа
         const sentStatus = row['G'];  // Статус отправки
         const keyCount = row['D'];    // Количество ключей
@@ -89,6 +89,9 @@ async function processOrders() {
         console.log(`Количество ключей (D): "${keyCount}"`);
         console.log(`Трейд-ссылка (E): "${tradeLink}"`);
         console.log(`Username (C): "${username}"`);
+
+        // Пропускаем строку, если это заголовки или пустая
+        if (orderStatus === 'Статус' || orderStatus === undefined) continue;
 
         if (orderStatus === 'Ожидает отправки' && sentStatus !== 'Трейд создан' && sentStatus !== 'Выполнен') {
           console.log('🎯 НАЙДЕН ЗАКАЗ ДЛЯ ОБРАБОТКИ (продажа)!');
@@ -109,7 +112,9 @@ async function processOrders() {
           const partnerAccountId = partnerMatch[1];
           const token = tokenMatch[1];
 
-          const offer = manager.createOffer(partnerAccountId);
+          // Преобразуем account ID в SteamID64
+          const steamId64 = (BigInt(partnerAccountId) + 76561197960265728n).toString();
+          const offer = manager.createOffer(steamId64);
           offer.setAccessToken(token);
 
           manager.getInventoryContents(440, 2, true, (err, myInventory) => {
@@ -171,17 +176,20 @@ async function processOrders() {
       for (const [index, row] of rows.entries()) {
         console.log(`\n--- Строка ${index + 1} (покупка) ---`);
 
-        const orderStatus = row['F']; // Статус заказа
-        const sentStatus = row['G'];  // Статус отправки
-        const keyCount = row['D'];    // Количество ключей
-        const tradeLink = row['E'];   // Трейд-ссылка
-        const username = row['C'];     // Username
+        const orderStatus = row['F'];
+        const sentStatus = row['G'];
+        const keyCount = row['D'];
+        const tradeLink = row['E'];
+        const username = row['C'];
 
         console.log(`Статус заказа (F): "${orderStatus}"`);
         console.log(`Статус отправки (G): "${sentStatus}"`);
         console.log(`Количество ключей (D): "${keyCount}"`);
         console.log(`Трейд-ссылка (E): "${tradeLink}"`);
         console.log(`Username (C): "${username}"`);
+
+        // Пропускаем строку с заголовками
+        if (orderStatus === 'Статус' || orderStatus === undefined) continue;
 
         if (orderStatus === 'Ожидает получения' && sentStatus !== 'Трейд создан' && sentStatus !== 'Выполнен') {
           console.log('🎯 НАЙДЕН ЗАКАЗ ДЛЯ ОБРАБОТКИ (покупка)!');
@@ -202,7 +210,9 @@ async function processOrders() {
           const partnerAccountId = partnerMatch[1];
           const token = tokenMatch[1];
 
-          const offer = manager.createOffer(partnerAccountId);
+          // Преобразуем account ID в SteamID64
+          const steamId64 = (BigInt(partnerAccountId) + 76561197960265728n).toString();
+          const offer = manager.createOffer(steamId64);
           offer.setAccessToken(token);
           offer.setMessage(`Please put ${count} TF2 keys into this trade. After you confirm, I will send payment.`);
 
@@ -242,4 +252,4 @@ async function processOrders() {
 
 // Запускаем проверку каждые 30 секунд
 setInterval(processOrders, 30000);
-console.log('🚀 Бот мониторинга запущен. Проверка каждые 30 секунд...');
+console.log('🚀 Бот мониторинга запущен. Проверка каждые 30 секунд...');;
